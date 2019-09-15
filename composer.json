@@ -1,5 +1,9 @@
 {
-    "require": {
-        "php-curl-class/php-curl-class": "@dev"
-    }
+  "require": {
+    "php-curl-class/php-curl-class": "@dev",
+    "vlucas/phpdotenv": "^3.4",
+    "predis/predis": "^1.1",
+    "ext-json": "*",
+    "ext-redis": "*"
+  }
 }

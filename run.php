@@ -12,7 +12,7 @@ ini_set('display_errors', 1);
 set_time_limit(0);
 
 define('DS', DIRECTORY_SEPARATOR);
-define('APP_PATH', realpath(__DIR__));
+define('ROOT_PATH', realpath(__DIR__));
 
 date_default_timezone_set('Asia/Shanghai');
 
@@ -37,7 +37,7 @@ function customize_error_handler()
 function system_log($content, array $response = [], $fileName = '')
 {
     try {
-        $path = sprintf('%s/logs/%s/', APP_PATH, date('Y-m'));
+        $path = sprintf('%s/logs/%s/', ROOT_PATH, date('Y-m'));
         $file = $path . ($fileName ?: date('d')) . '.log';
 
         if (!is_dir($path)) {
@@ -75,7 +75,7 @@ function system_log($content, array $response = [], $fileName = '')
 function is_locked($taskName = '')
 {
     try {
-        $lock = APP_PATH . '/num_limit/' . date('Y-m-d') . '/' . $taskName . '.lock';
+        $lock = ROOT_PATH . '/num_limit/' . date('Y-m-d') . '/' . $taskName . '.lock';
 
         if (file_exists($lock)) return true;
     } catch (\Exception $e) {
@@ -97,7 +97,7 @@ function is_locked($taskName = '')
 function lock_task($taskName = '')
 {
     try {
-        $path = APP_PATH . '/num_limit/' . date('Y-m-d') . '/';
+        $path = ROOT_PATH . '/num_limit/' . date('Y-m-d') . '/';
         $file = $taskName . '.lock';
         $lock = $path . $file;
 
@@ -134,13 +134,100 @@ function lock_task($taskName = '')
     return true;
 }
 
+/**
+ * 获取配置
+ *
+ * @param string $key 键，支持点式访问
+ *
+ * @return array|mixed
+ */
+function config($key = '')
+{
+    $allConfig = Money::getInstance()->getConfig();
+
+    if (strlen($key)) {
+        if (strpos($key, '.')) {
+            $keys = explode('.', $key);
+            $val = $allConfig;
+
+            foreach ($keys as $k) {
+                if (!isset($val[$k])) {
+                    return null; // 任一下标不存在就返回null
+                }
+                $val = $val[$k];
+            }
+
+            return $val;
+        } else {
+            if (isset($allConfig[$key])) {
+                return $allConfig[$key];
+            }
+
+            return null;
+        }
+    }
+
+    return $allConfig;
+}
+
+/**
+ * 获取环境变量值
+ *
+ * @param $key
+ * @param null $default
+ *
+ * @return array|bool|false|null|string
+ */
+function env($key, $default = null)
+{
+    Money::getInstance()->loadAllEnv();
+
+    $value = getenv($key);
+    if ($value === false) {
+        return $default;
+    }
+
+    switch (strtolower($value)) {
+        case 'true':
+        case '(true)':
+            return true;
+        case 'false':
+        case '(false)':
+            return false;
+        case 'empty':
+        case '(empty)':
+            return '';
+        case 'null':
+        case '(null)':
+            return null;
+    }
+
+    if (($valueLength = strlen($value)) > 1 && $value[0] === '"' && $value[$valueLength - 1] === '"') { // 去除双引号
+        return substr($value, 1, -1);
+    }
+
+    return $value;
+}
+
+/**
+ * Redis
+ *
+ * @return object|Redis
+ */
+function redis()
+{
+    return Money::getInstance()->redis();
+}
+
 require __DIR__ . '/vendor/autoload.php';
 
 use Curl\Curl;
+use Dotenv\Dotenv;
+use Predis\Client AS RedisClient;
 
 class Money
 {
-    const VERSION = 'v0.1.3 beta';
+    const VERSION = 'v0.1.4 beta';
 
     /**
      * @var Money
@@ -151,6 +238,31 @@ class Money
      * @var Curl
      */
     protected static $client;
+
+    /**
+     * @var array config
+     */
+    protected static $config;
+
+    /**
+     * @var array 所有环境变量，那些个见不得人的东西
+     */
+    protected static $allEnv;
+
+    /**
+     * @var object redis client
+     */
+    protected static $redis;
+
+    /**
+     * @var string
+     */
+    public $username = '';
+
+    /**
+     * @var array
+     */
+    public $queryArr;
 
     /**
      * @throws ErrorException
@@ -210,6 +322,7 @@ class Money
      *
      * @return bool
      * @throws ErrorException
+     * @throws \Exception
      */
     public function heartBeat()
     {
@@ -242,63 +355,27 @@ class Money
     {
         if (!self::$client instanceof Curl) {
             self::$client = new Curl();
-
-            // 模拟今日头条客户端
-            self::$client->setUserAgent('NewsLite 6.8.8 rv:6.8.8.0 (iPhone; iOS 12.4; zh_CN) Cronet');
-
-            // 注意CURLOPT_HTTPHEADER原生设置不会存到curl对象中
-            self::$client->setHeaders([
-                // 基础Header
-                'Accept' => 'application/json',
-                'x-Tt-Token' => '00c1c7dd24f94f7c49d26febdfeb3bc05b76c01f9350bf1ca3b2065d5fd6d9138597768515d8fffd5edf697044173753f014',
-                'Content-Type' => 'application/json; encoding=utf-8',
-                'X-SS-Cookie' => 'excgd=0803; install_id=80841499878; ttreq=1$21885ec84d8dd6c79a5ea9f3622c368689a145d1; SLARDAR_WEB_ID=7dbf5927-4045-4433-a698-b8ffd21d5ba5; odin_tt=9f2534db82e4b012d7b8a53bd9cc6f542bedbac5063289252c15ca6969c397066b69fbd668d2334b62ee07d4cfd5699a83ea9ce82410fdf607569afab2120aab; sessionid=c1c7dd24f94f7c49d26febdfeb3bc05b; sid_guard=c1c7dd24f94f7c49d26febdfeb3bc05b%7C1564529554%7C5184000%7CSat%2C+28-Sep-2019+23%3A32%3A34+GMT; sid_tt=c1c7dd24f94f7c49d26febdfeb3bc05b; uid_tt=f0bcf6f28bd1807a12a75f66e01d9c8f',
-                'tt-request-time' => str_replace('.', '', microtime(true)),
-                'sdk-version' => 1,
-                'X-SS-STUB' => '22E67CC3AE278CB47BCA0058382D3330',
-                'X-Khronos' => time(),
-                'X-Pods' => '',
-                'x-ss-sessionid' => 'c1c7dd24f94f7c49d26febdfeb3bc05b',
-                'X-Gorgon' => '8300000000007bab819b91c627487d43797e85d18b4986ac15c4',
-
-                // Cookies 2019/09/28 两个月
-                'Cookie' => 'excgd=0803; odin_tt=9f2534db82e4b012d7b8a53bd9cc6f542bedbac5063289252c15ca6969c397066b69fbd668d2334b62ee07d4cfd5699a83ea9ce82410fdf607569afab2120aab; sid_guard=c1c7dd24f94f7c49d26febdfeb3bc05b%7C1564529554%7C5184000%7CSat%2C+28-Sep-2019+23%3A32%3A34+GMT; uid_tt=f0bcf6f28bd1807a12a75f66e01d9c8f; sid_tt=c1c7dd24f94f7c49d26febdfeb3bc05b; sessionid=c1c7dd24f94f7c49d26febdfeb3bc05b; SLARDAR_WEB_ID=7dbf5927-4045-4433-a698-b8ffd21d5ba5; install_id=80841499878; ttreq=1$21885ec84d8dd6c79a5ea9f3622c368689a145d1'
-            ]);
         }
 
         return self::$client;
     }
 
+    /**
+     * @param array $addQuery
+     *
+     * @return string
+     * @throws Exception
+     */
     protected function getQuery($addQuery = [])
     {
+        if ($this->queryArr === null) {
+            throw new \Exception('queryArr为空');
+        } else if (!is_array($this->queryArr)) {
+            throw new \Exception('queryArr必须是一个数组');
+        }
+
         return '?' . http_build_query(array_merge(
-                [
-                    '&_request_from' => 'web',
-                    'fp' => 'G2TZLlXrcSZ7FlGIcSU1J2xeLlZu',
-                    'version_code' => '6.8.8',
-                    'app_name' => 'news_article_lite',
-                    'vid' => '087B36DF-1F76-4665-BF9A-537489141AFE',
-                    'device_id' => '66197677567',
-                    'channel' => 'App Store',
-                    'resolution' => '1125*2001',
-                    'aid' => '35',
-                    // 广告版本，注意使用PHP_QUERY_RFC3986编码，否则报账户异常错误
-                    'ab_version' => '668904,1023119,668906,668903,679106,668905,933995,661929,785656,668907,808414,1016025,846821,861726,1009099,914859,928942',
-                    'ab_feature' => '201617,z1',
-                    'review_flag' => '0',
-                    'ab_group' => 'z1,201617',
-                    'update_version_code' => '6880',
-                    'openudid' => '3a16a477d786b2bb97555b89c5e94b763af7e497',
-                    'idfv' => '087B36DF-1F76-4665-BF9A-537489141AFE',
-                    'ac' => 'WIFI',
-                    'os_version' => '12.4',
-                    'ssmix' => 'a',
-                    'device_platform' => 'iphone',
-                    'iid' => '80841499878',
-                    'ab_client' => 'a1,f2,f7,e1',
-                    'device_type' => 'iPhone 6S Plus',
-                    'idfa' => '601F31ED-7CF9-4B5A-8E4D-FDD34195BC59'
-                ],
+                $this->queryArr,
                 $addQuery
             ), '', '&', PHP_QUERY_RFC3986);
     }
@@ -310,6 +387,7 @@ class Money
      *
      * @return bool
      * @throws ErrorException
+     * @throws \Exception
      */
     public function updateToken()
     {
@@ -393,6 +471,7 @@ class Money
      *
      * @return bool
      * @throws ErrorException
+     * @throws \Exception
      */
     public function openTreasureBoxTask()
     {
@@ -606,7 +685,7 @@ class Money
             sleep(mt_rand(11, 33));
 
             // 编码有问题，导致账户异常，暂时处理为直接拼接编码后的query字符
-            $curl->post('https://is.snssdk.com/score_task/v1/task/new_excitation_ad/?fp=G2TZLlXrcSZ7FlGIcSU1J2xeLlZ1&version_code=6.8.8&app_name=news_article_lite&vid=087B36DF-1F76-4665-BF9A-537489141AFE&device_id=66197677567&channel=App%20Store&resolution=1125*2001&aid=35&ab_version=668904%2C1023119%2C668906%2C668903%2C679106%2C668905%2C933995%2C661929%2C785656%2C668907%2C808414%2C1016025%2C846821%2C861726%2C1009099%2C914859%2C928942&ab_feature=201617%2Cz1&review_flag=0&ab_group=z1%2C201617&update_version_code=6880&openudid=3a16a477d786b2bb97555b89c5e94b763af7e497&idfv=087B36DF-1F76-4665-BF9A-537489141AFE&ac=WIFI&os_version=12.4&ssmix=a&device_platform=iphone&iid=80841499878&ab_client=a1%2Cf2%2Cf7%2Ce1&device_type=iPhone%206S%20Plus&idfa=601F31ED-7CF9-4B5A-8E4D-FDD34195BC59', [
+            $curl->post('https://is.snssdk.com/score_task/v1/task/new_excitation_ad/?', [
                 'task_id' => 143,
                 'score_source' => $type
             ]);
@@ -786,13 +865,14 @@ class Money
 
     /**
      * @param string $origUri
+     *
      * @return string
      */
     public static function formatQuery($origUri = '')
     {
         $origUri = urldecode($origUri);
 
-        if (preg_match_all('/[\?&](?P<key>[^=]+)=(?P<val>[^&$]+)/i', $origUri, $matches, PREG_SET_ORDER)) {
+        if (preg_match_all('/[?&](?P<key>[^=]+)=(?P<val>[^&$]+)/i', $origUri, $matches, PREG_SET_ORDER)) {
             $rtStr = '';
             foreach ($matches as $match) {
                 $rtStr .= sprintf("%s'%s' => '%s',\n", str_repeat(' ', 4), $match['key'], $match['val']);
@@ -808,11 +888,12 @@ class Money
 
     /**
      * @param string $allHeaders
+     *
      * @return string
      */
     public static function formatHeaders($allHeaders = '')
     {
-        if (preg_match_all('/(?P<name>[\w-]+):(?P<val>[^\n]+)\n/i', $allHeaders, $matches, PREG_SET_ORDER)) {
+        if (preg_match_all('/(?P<name>[\w-]+):\s(?P<val>[^\n]+)\n/i', $allHeaders, $matches, PREG_SET_ORDER)) {
             $rtStr = '';
             foreach ($matches as $match) {
                 $rtStr .= sprintf("%s'%s' => '%s',\n", str_repeat(' ', 4), $match['name'], $match['val']);
@@ -825,10 +906,98 @@ class Money
 
         return '';
     }
+
+    /**
+     * @return array|mixed
+     */
+    public function getConfig()
+    {
+        if (is_null(self::$config)) {
+            self::$config = require ROOT_PATH . '/config.php';
+        }
+
+        return self::$config;
+    }
+
+    /**
+     * @param string $fileName
+     *
+     * @return array
+     */
+    public function loadAllEnv($fileName = '.env')
+    {
+        if (is_null(self::$allEnv)) {
+            self::$allEnv = Dotenv::create(ROOT_PATH, $fileName)->load();
+        }
+
+        return self::$allEnv;
+    }
+
+    /**
+     * @return object|RedisClient
+     */
+    public function redis()
+    {
+        if (!self::$redis instanceof RedisClient) {
+            self::$redis = new RedisClient([
+                'scheme' => 'tcp',
+                'host' => config('redis.host'),
+                'password' => config('redis.password'),
+                'port' => config('redis.port'),
+                'database' => config('redis.database')
+            ]);
+        }
+
+        return self::$redis;
+    }
 }
 
 try {
-    Money::handle();
+    $redis = redis();
+
+    while (true) {
+        if ($redis->exists('is_locked')) {
+            usleep(500000);
+            continue;
+        }
+
+        /**
+         * 多用户
+         */
+        $users = config('users');
+        foreach ($users as $user) {
+            $money = Money::getInstance();
+
+            $money->queryArr = $user['queryArr'];
+            $money->username = $user['username'];
+
+            /**
+             * 设置客户端
+             * 注意CURLOPT_HTTPHEADER原生设置不会存到这里封装的curl对象中，应调用curl类封装的setHeaders
+             */
+            $client = $money->getClient();
+            $client->setHeaders($user['headers']);
+            $client->setHeaders([ // 附加默认的headers
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json; encoding=utf-8', // 类型参数最好每次请求前单独指定，此处指定默认值
+                'tt-request-time' => str_replace('.', '', microtime(true)),
+                'sdk-version' => 1,
+                'X-Khronos' => time(),
+                'X-Pods' => '',
+            ]);
+
+            /**
+             * 任务处理
+             */
+            $money::handle();
+        }
+
+        /**
+         * 控制执行频率
+         * 因为宝箱每小时刷新一次，加些延迟
+         */
+        $redis->setex('is_locked', 3600, 1);
+    }
 } catch (\Exception $e) {
     system_log($e->getMessage());
 }
