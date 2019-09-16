@@ -601,28 +601,41 @@ class Money
         $curl = self::getClient();
         $curl->setHeader('Content-Type', 'application/json; encoding=utf-8');
 
-        $adTypes = [1, 2]; // 目前已知两种广告类型
-        foreach ($adTypes as $type) {
+        $adTasks = [ // 目前已知三种广告类型
+            [
+                'task_id' => 143,
+                'score_source' => 1
+            ],
+            [
+                'task_id' => 143,
+                'score_source' => 2
+            ],
+            [
+                'task_id' => 149,
+                'score_source' => 2
+            ]
+        ];
+        foreach ($adTasks as $adTask) {
             sleep(mt_rand(11, 33));
 
             // 编码有问题，导致账户异常，暂时处理为直接拼接编码后的query字符
-            $curl->post('https://is.snssdk.com/score_task/v1/task/new_excitation_ad/?fp=G2TZLlXrcSZ7FlGIcSU1J2xeLlZ1&version_code=6.8.8&app_name=news_article_lite&vid=087B36DF-1F76-4665-BF9A-537489141AFE&device_id=66197677567&channel=App%20Store&resolution=1125*2001&aid=35&ab_version=668904%2C1023119%2C668906%2C668903%2C679106%2C668905%2C933995%2C661929%2C785656%2C668907%2C808414%2C1016025%2C846821%2C861726%2C1009099%2C914859%2C928942&ab_feature=201617%2Cz1&review_flag=0&ab_group=z1%2C201617&update_version_code=6880&openudid=3a16a477d786b2bb97555b89c5e94b763af7e497&idfv=087B36DF-1F76-4665-BF9A-537489141AFE&ac=WIFI&os_version=12.4&ssmix=a&device_platform=iphone&iid=80841499878&ab_client=a1%2Cf2%2Cf7%2Ce1&device_type=iPhone%206S%20Plus&idfa=601F31ED-7CF9-4B5A-8E4D-FDD34195BC59', [
-                'task_id' => 143,
-                'score_source' => $type
-            ]);
+            $curl->post(
+                'https://is.snssdk.com/score_task/v1/task/new_excitation_ad/?fp=G2TZLlXrcSZ7FlGIcSU1J2xeLlZ1&version_code=6.8.8&app_name=news_article_lite&vid=087B36DF-1F76-4665-BF9A-537489141AFE&device_id=66197677567&channel=App%20Store&resolution=1125*2001&aid=35&ab_version=668904%2C1023119%2C668906%2C668903%2C679106%2C668905%2C933995%2C661929%2C785656%2C668907%2C808414%2C1016025%2C846821%2C861726%2C1009099%2C914859%2C928942&ab_feature=201617%2Cz1&review_flag=0&ab_group=z1%2C201617&update_version_code=6880&openudid=3a16a477d786b2bb97555b89c5e94b763af7e497&idfv=087B36DF-1F76-4665-BF9A-537489141AFE&ac=WIFI&os_version=12.4&ssmix=a&device_platform=iphone&iid=80841499878&ab_client=a1%2Cf2%2Cf7%2Ce1&device_type=iPhone%206S%20Plus&idfa=601F31ED-7CF9-4B5A-8E4D-FDD34195BC59',
+                $adTask
+            );
 
             if ($curl->error) {
-                system_log(sprintf('%s %s#%s', sprintf('看广告任务出错，广告类型为%d', $type), $curl->errorCode, $curl->errorMessage));
+                system_log(sprintf('%s %s#%s', sprintf('看广告任务出错，广告类型为%d', json_encode($adTask)), $curl->errorCode, $curl->errorMessage));
             }
 
             $response = json_decode($curl->rawResponse, true);
             if (isset($response['err_tips']) && $response['err_tips'] === 'success') {
-                system_log(sprintf('成功完成看广告任务，广告类型为%d，获得金币%d', $type, $response['data']['score_amount']), $response);
+                system_log(sprintf('成功完成看广告任务，广告类型为%d，获得金币%d', json_encode($adTask), $response['data']['score_amount']), $response);
             } else {
-                system_log(sprintf('看广告任务出错，广告类型为%d', $type), $response);
+                system_log(sprintf('看广告任务出错，广告类型为%d', json_encode($adTask)), $response);
 
                 // 锁定任务
-                if ($type === 2 && isset($response['err_no']) && $response['err_no'] === 4) { // 冷却期间会返回1054错误，任务达到次数限制返回4错误
+                if ($adTask['score_source'] === 2 && isset($response['err_no']) && $response['err_no'] === 4) { // 冷却期间会返回1054错误，任务达到次数限制返回4错误
                     lock_task('watchADTask');
                 }
             }
@@ -792,7 +805,7 @@ class Money
     {
         $origUri = urldecode($origUri);
 
-        if (preg_match_all('/[\?&](?P<key>[^=]+)=(?P<val>[^&$]+)/i', $origUri, $matches, PREG_SET_ORDER)) {
+        if (preg_match_all('/[?&](?P<key>[^=]+)=(?P<val>[^&$]+)/i', $origUri, $matches, PREG_SET_ORDER)) {
             $rtStr = '';
             foreach ($matches as $match) {
                 $rtStr .= sprintf("%s'%s' => '%s',\n", str_repeat(' ', 4), $match['key'], $match['val']);
@@ -812,7 +825,7 @@ class Money
      */
     public static function formatHeaders($allHeaders = '')
     {
-        if (preg_match_all('/(?P<name>[\w-]+):(?P<val>[^\n]+)\n/i', $allHeaders, $matches, PREG_SET_ORDER)) {
+        if (preg_match_all('/(?P<name>[\w-]+):\s(?P<val>[^\n]+)\n/i', $allHeaders, $matches, PREG_SET_ORDER)) {
             $rtStr = '';
             foreach ($matches as $match) {
                 $rtStr .= sprintf("%s'%s' => '%s',\n", str_repeat(' ', 4), $match['name'], $match['val']);

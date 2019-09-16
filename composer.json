@@ -1,5 +1,6 @@
 {
-    "require": {
-        "php-curl-class/php-curl-class": "@dev"
-    }
+  "require": {
+    "php-curl-class/php-curl-class": "@dev",
+    "ext-json": "*"
+  }
 }
