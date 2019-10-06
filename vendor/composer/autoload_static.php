@@ -4,9 +4,25 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit07599b5a385f585dbcdc1829bd317a6c
+class ComposerStaticInit6002084700b4755786ecdebbb44d9c13
 {
+    public static $files = array (
+        '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
+    );
+
     public static $prefixLengthsPsr4 = array (
+        'S' => 
+        array (
+            'Symfony\\Polyfill\\Ctype\\' => 23,
+        ),
+        'P' => 
+        array (
+            'Predis\\' => 7,
+        ),
+        'D' => 
+        array (
+            'Dotenv\\' => 7,
+        ),
         'C' => 
         array (
             'Curl\\' => 5,
@@ -14,17 +30,40 @@ class ComposerStaticInit07599b5a385f585dbcdc1829bd317a6c
     );
 
     public static $prefixDirsPsr4 = array (
+        'Symfony\\Polyfill\\Ctype\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/polyfill-ctype',
+        ),
+        'Predis\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/predis/predis/src',
+        ),
+        'Dotenv\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/vlucas/phpdotenv/src',
+        ),
         'Curl\\' => 
         array (
             0 => __DIR__ . '/..' . '/php-curl-class/php-curl-class/src/Curl',
         ),
     );
 
+    public static $prefixesPsr0 = array (
+        'P' => 
+        array (
+            'PhpOption\\' => 
+            array (
+                0 => __DIR__ . '/..' . '/phpoption/phpoption/src',
+            ),
+        ),
+    );
+
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit07599b5a385f585dbcdc1829bd317a6c::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit07599b5a385f585dbcdc1829bd317a6c::$prefixDirsPsr4;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit6002084700b4755786ecdebbb44d9c13::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit6002084700b4755786ecdebbb44d9c13::$prefixDirsPsr4;
+            $loader->prefixesPsr0 = ComposerStaticInit6002084700b4755786ecdebbb44d9c13::$prefixesPsr0;
 
         }, null, ClassLoader::class);
     }
