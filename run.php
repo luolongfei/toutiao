@@ -212,7 +212,7 @@ function env($key, $default = null)
 /**
  * Redis
  *
- * @return object|Redis
+ * @return object|RedisClient
  */
 function redis()
 {
@@ -227,7 +227,7 @@ use Predis\Client AS RedisClient;
 
 class Money
 {
-    const VERSION = 'v0.1.4 beta';
+    const VERSION = 'v0.1.5 beta';
 
     /**
      * @var Money
