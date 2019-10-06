@@ -434,7 +434,7 @@ class Money
             return true;
         }
 
-        sleep(mt_rand(2, 33));
+        self::toSleep();
 
         $curl = self::getClient();
         $curl->post('https://is.snssdk.com/score_task/v1/task/sign_in/' . $this->getQuery());
@@ -476,7 +476,7 @@ class Money
     public function openTreasureBoxTask()
     {
         // 随机延迟，模拟人工
-        sleep(mt_rand(2, 22));
+        self::toSleep();
 
         $curl = self::getClient();
         $curl->setHeader('Content-Type', 'application/json; encoding=utf-8');
@@ -521,7 +521,7 @@ class Money
             return true;
         }
 
-        sleep(mt_rand(2, 33));
+        self::toSleep();
 
         $curl = self::getClient();
         $curl->setHeader('Content-Type', 'application/json; encoding=utf-8');
@@ -586,7 +586,7 @@ class Money
             return true;
         }
 
-        sleep(mt_rand(2, 33));
+        self::toSleep();
 
         $curl = self::getClient();
         $curl->setHeader('Content-Type', 'application/json; encoding=utf-8');
@@ -634,7 +634,7 @@ class Money
         $curl->setHeader('Content-Type', 'application/json; encoding=utf-8');
 
         for ($i = 1; $i <= 3; $i++) { // 每天分享三次，每次200金币
-            sleep(mt_rand(2, 33));
+            self::toSleep();
 
             $curl->post('https://is.snssdk.com/score_task/v1/landing/add_amount/' . $this->getQuery(), [
                 'task_id' => 100
@@ -695,7 +695,7 @@ class Money
             ]
         ];
         foreach ($adTasks as $adTask) {
-            sleep(mt_rand(11, 33));
+            self::toSleep();
 
             // 编码有问题，导致账户异常，暂时处理为直接拼接编码后的query字符
             $curl->post(
@@ -741,7 +741,7 @@ class Money
 
         // 结束上一次睡眠并领取金币
         if ($now >= strtotime('09:09') && $now <= strtotime('11:11') && !is_locked('sleepStopTask')) {
-            sleep(mt_rand(2, 33));
+            self::toSleep();
 
             // 结束睡眠
             $curl->post('https://i.snssdk.com/score_task/v1/sleep/stop/' . $this->getQuery(), [
@@ -781,7 +781,7 @@ class Money
 
         // 开始下一次睡眠
         if ($now >= strtotime('21:21') && $now <= strtotime('23:23') && !is_locked('sleepStartTask')) {
-            sleep(mt_rand(2, 33));
+            self::toSleep();
 
             // 开始睡眠
             $curl->post('https://i.snssdk.com/score_task/v1/sleep/start/' . $this->getQuery(), [
@@ -828,7 +828,7 @@ class Money
 
         $count = 0;
         for ($i = 1; $i <= 5; $i++) { // 每天搜索5次，共300金币
-            sleep(mt_rand(2, 33));
+            self::toSleep();
 
             $curl->get('https://is.snssdk.com/api/search/content/' . $this->getQuery([
                     'action_type' => 'history_keyword_search',
@@ -962,6 +962,11 @@ class Money
         }
 
         return self::$redis;
+    }
+
+    public static function toSleep()
+    {
+        sleep(mt_rand(1, 10));
     }
 }
 
